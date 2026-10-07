@@ -1,0 +1,506 @@
+import requests
+from config import HF_API_KEY
+
+
+# ============================================================
+# HUGGING FACE AI
+# ============================================================
+
+HF_URL = "https://router.huggingface.co/v1/chat/completions"
+
+HF_HEADERS = {
+    "Authorization": f"Bearer {HF_API_KEY}",
+    "Content-Type": "application/json"
+}
+
+
+def ask_ai(question):
+
+    data = {
+        "model": "Qwen/Qwen2.5-7B-Instruct:fastest",
+
+        "messages": [
+            {
+                "role": "system",
+                "content": (
+                    "You are a helpful AI student assistant. "
+                    "Give clear, simple and educational answers."
+                )
+            },
+            {
+                "role": "user",
+                "content": question
+            }
+        ],
+
+        "stream": False
+    }
+
+    try:
+
+        response = requests.post(
+            HF_URL,
+            headers=HF_HEADERS,
+            json=data,
+            timeout=60
+        )
+
+        response.raise_for_status()
+
+        result = response.json()
+
+        return result["choices"][0]["message"]["content"]
+
+    except Exception as e:
+
+        return "AI Error: " + str(e)
+
+
+# ============================================================
+# WIKIPEDIA API
+# ============================================================
+
+def wikipedia(topic):
+
+    url = (
+        "https://en.wikipedia.org/api/rest_v1/page/summary/"
+        + requests.utils.quote(topic)
+    )
+
+    try:
+
+        response = requests.get(
+            url,
+            timeout=15
+        )
+
+        if response.status_code == 404:
+            return "I couldn't find that topic on Wikipedia."
+
+        response.raise_for_status()
+
+        data = response.json()
+
+        title = data.get("title", topic)
+        description = data.get("description", "")
+        extract = data.get("extract", "")
+
+        answer = f"\n📚 {title}\n"
+
+        if description:
+            answer += f"{description}\n\n"
+
+        answer += extract
+
+        return answer
+
+    except Exception as e:
+
+        return "Wikipedia Error: " + str(e)
+
+
+# ============================================================
+# WEATHER API
+# ============================================================
+
+def weather(city):
+
+    try:
+
+        # ------------------------------------
+        # Find city coordinates
+        # ------------------------------------
+
+        geo_url = "https://geocoding-api.open-meteo.com/v1/search"
+
+        geo_params = {
+            "name": city,
+            "count": 1,
+            "language": "en",
+            "format": "json"
+        }
+
+        geo_response = requests.get(
+            geo_url,
+            params=geo_params,
+            timeout=15
+        )
+
+        geo_response.raise_for_status()
+
+        geo_data = geo_response.json()
+
+        if "results" not in geo_data:
+            return "City not found."
+
+        location = geo_data["results"][0]
+
+        latitude = location["latitude"]
+        longitude = location["longitude"]
+        city_name = location["name"]
+
+        # ------------------------------------
+        # Get weather
+        # ------------------------------------
+
+        weather_url = "https://api.open-meteo.com/v1/forecast"
+
+        weather_params = {
+            "latitude": latitude,
+            "longitude": longitude,
+
+            "current": (
+                "temperature_2m,"
+                "relative_humidity_2m,"
+                "apparent_temperature,"
+                "wind_speed_10m"
+            )
+        }
+
+        response = requests.get(
+            weather_url,
+            params=weather_params,
+            timeout=15
+        )
+
+        response.raise_for_status()
+
+        data = response.json()
+
+        current = data["current"]
+
+        temperature = current["temperature_2m"]
+        humidity = current["relative_humidity_2m"]
+        feels_like = current["apparent_temperature"]
+        wind = current["wind_speed_10m"]
+
+        return f"""
+🌤️ Weather: {city_name}
+
+Temperature: {temperature}°C
+Feels like: {feels_like}°C
+Humidity: {humidity}%
+Wind speed: {wind} km/h
+"""
+
+    except Exception as e:
+
+        return "Weather Error: " + str(e)
+
+
+# ============================================================
+# JOKE API
+# ============================================================
+
+def get_joke():
+
+    url = (
+        "https://v2.jokeapi.dev/joke/"
+        "Programming,Miscellaneous"
+        "?safe-mode"
+    )
+
+    try:
+
+        response = requests.get(
+            url,
+            timeout=15
+        )
+
+        response.raise_for_status()
+
+        data = response.json()
+
+        if data["type"] == "single":
+
+            return "😂 " + data["joke"]
+
+        else:
+
+            return (
+                "😂 "
+                + data["setup"]
+                + "\n"
+                + data["delivery"]
+            )
+
+    except Exception as e:
+
+        return "Joke API Error: " + str(e)
+
+
+# ============================================================
+# REST COUNTRIES API
+# ============================================================
+
+def country_info(country):
+
+    url = (
+        "https://restcountries.com/v3.1/name/"
+        + requests.utils.quote(country)
+    )
+
+    try:
+
+        response = requests.get(
+            url,
+            timeout=15
+        )
+
+        response.raise_for_status()
+
+        data = response.json()
+
+        country_data = data[0]
+
+        name = country_data["name"]["common"]
+
+        capital = country_data.get(
+            "capital",
+            ["Unknown"]
+        )[0]
+
+        population = country_data.get(
+            "population",
+            "Unknown"
+        )
+
+        region = country_data.get(
+            "region",
+            "Unknown"
+        )
+
+        return f"""
+🌍 Country Information
+
+Country: {name}
+Capital: {capital}
+Population: {population:,}
+Region: {region}
+"""
+
+    except Exception as e:
+
+        return "Country API Error: " + str(e)
+
+
+# ============================================================
+# SENTIMENT ANALYSIS
+# ============================================================
+
+def sentiment_analysis(text):
+
+    url = (
+        "https://router.huggingface.co/"
+        "hf-inference/models/"
+        "distilbert/distilbert-base-uncased-finetuned-sst-2-english"
+    )
+
+    headers = {
+        "Authorization": f"Bearer {HF_API_KEY}"
+    }
+
+    try:
+
+        response = requests.post(
+            url,
+            headers=headers,
+            json={
+                "inputs": text
+            },
+            timeout=60
+        )
+
+        response.raise_for_status()
+
+        result = response.json()
+
+        # API normally returns:
+        # [[
+        #   {"label": "POSITIVE", "score": 0.99},
+        #   {"label": "NEGATIVE", "score": 0.01}
+        # ]]
+
+        if isinstance(result, list):
+
+            if isinstance(result[0], list):
+                result = result[0]
+
+            best = max(
+                result,
+                key=lambda x: x["score"]
+            )
+
+            label = best["label"]
+            score = best["score"]
+
+            if label == "POSITIVE":
+                emoji = "😊"
+
+            else:
+                emoji = "😔"
+
+            return (
+                f"{emoji} Sentiment: {label}\n"
+                f"Confidence: {score:.2%}"
+            )
+
+        return "Could not analyze sentiment."
+
+    except Exception as e:
+
+        return "Sentiment Error: " + str(e)
+
+
+# ============================================================
+# COMMAND ROUTER
+# ============================================================
+
+def process_command(command):
+
+    command_lower = command.lower().strip()
+
+
+    # ------------------------------------
+    # WEATHER
+    # ------------------------------------
+
+    if command_lower == "weather":
+
+        city = input("Enter city: ")
+
+        return weather(city)
+
+
+    # ------------------------------------
+    # WIKIPEDIA
+    # ------------------------------------
+
+    elif command_lower == "wiki":
+
+        topic = input("Enter topic: ")
+
+        return wikipedia(topic)
+
+
+    # ------------------------------------
+    # JOKE
+    # ------------------------------------
+
+    elif command_lower == "joke":
+
+        return get_joke()
+
+
+    # ------------------------------------
+    # COUNTRY
+    # ------------------------------------
+
+    elif command_lower == "country":
+
+        country = input("Enter country: ")
+
+        return country_info(country)
+
+
+    # ------------------------------------
+    # SENTIMENT
+    # ------------------------------------
+
+    elif command_lower == "sentiment":
+
+        text = input(
+            "Enter a sentence to analyze: "
+        )
+
+        return sentiment_analysis(text)
+
+
+    # ------------------------------------
+    # AI
+    # ------------------------------------
+
+    elif command_lower == "ai":
+
+        question = input(
+            "Ask the AI: "
+        )
+
+        return ask_ai(question)
+
+
+    # ------------------------------------
+    # UNKNOWN COMMAND
+    # ------------------------------------
+
+    else:
+
+        return """
+❌ Unknown command.
+
+Available commands:
+
+ai          → Ask the AI
+wiki        → Search Wikipedia
+weather     → Get weather
+country     → Country information
+sentiment   → Analyze sentiment
+joke        → Get a joke
+exit        → Exit program
+"""
+
+
+# ============================================================
+# MAIN PROGRAM
+# ============================================================
+
+def main():
+
+    print("=" * 60)
+
+    print("🤖 AI STUDENT ASSISTANT")
+
+    print("=" * 60)
+
+    print("""
+Available services:
+
+🤖 AI
+📚 Wikipedia
+🌤️ Weather
+🌍 Countries
+😊 Sentiment Analysis
+😂 Jokes
+
+Commands:
+
+ai
+wiki
+weather
+country
+sentiment
+joke
+exit
+""")
+
+    while True:
+
+        command = input("\nYou: ")
+
+        if command.lower() == "exit":
+
+            print("\nAI: Goodbye! 👋")
+
+            break
+
+        answer = process_command(command)
+
+        print("\n" + answer)
+
+
+# ============================================================
+# START PROGRAM
+# ============================================================
+
+if __name__ == "__main__":
+    main()
